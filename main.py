@@ -148,8 +148,9 @@ def main(tamaño_poblacion,tamaño_maximo_poblacion,radio_mutacion_individuo, ra
     # Convertir las imágenes a arrays de numpy
     imagenes_resized = [np.array(img) for img in imagenes_resized]
 
-    # Crear un escritor de video
-    writer = imageio.get_writer('output.mp4', fps=0.5)
+    with imageio.get_writer('output.mp4', fps=0.5) as writer:
+        for img in imagenes_resized:
+            writer.append_data(img)
 
 if __name__ == "__main__":
     def main():

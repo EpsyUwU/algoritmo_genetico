@@ -5,6 +5,9 @@ from PIL import Image, ImageTk, ImageSequence
 from sympy import symbols, lambdify, sympify
 from pandastable import Table, TableModel
 import pandas as pd
+import cv2
+import threading
+
 
 def update_table():
     new_data = pd.read_csv('datos_tabla.csv')
@@ -27,23 +30,27 @@ def mostrar_grafica():
     label = tk.Label(gif_frame, image=photo)
     label.image = photo  # Guardar una referencia a la imagen para evitar que sea eliminada por el recolector de basura
     label.pack()
-def play_gif():
+def play_video():
+    # Leer el video
+    cap = cv2.VideoCapture('output.mp4')
+
+    def video_stream():
+        ret, frame = cap.read()
+        if ret:  # Solo procesar el frame si es válido
+            cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+            img = Image.fromarray(cv2image).resize((480, 360))  # Cambia el tamaño según tus necesidades
+            imgtk = ImageTk.PhotoImage(image=img)
+            label.imgtk = imgtk
+            label.configure(image=imgtk)
+        root.after(40, video_stream)
+
     limpiar_frame(gif_frame)
-    # Leer el GIF
-    im = Image.open('output.gif')
-
-    # Crear un PhotoImage para cada frame en el GIF
-    frames = [ImageTk.PhotoImage(frame) for frame in ImageSequence.Iterator(im)]
-
     label = tk.Label(gif_frame)
     label.pack()
+    video_stream()  # Iniciar el streaming de video
 
-    def play(index=0):
-        # Mostrar el siguiente frame
-        label.config(image=frames[index])
-        if index < len(frames) - 1:  # Solo repetir si no es el último frame
-            root.after(50, play, index + 1)
-    play()
+    # Iniciar el streaming de video en un hilo separado para evitar que la interfaz gráfica se congele
+    threading.Thread(target=video_stream, daemon=True).start()
 
 def ejecutar():
     try:
@@ -206,7 +213,7 @@ radio_min.pack()
 button = tk.Button(button_frame, text="Ejecutar", command=ejecutar)
 button.pack()
 
-button_gif = tk.Button(button_frame, text="Mostrar video", command=play_gif)
+button_gif = tk.Button(button_frame, text="Mostrar video", command=play_video)
 button_gif.pack()
 
 button_grafica = tk.Button(button_frame, text="Mostrar gráfica", command=mostrar_grafica)
