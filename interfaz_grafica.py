@@ -7,7 +7,7 @@ from pandastable import Table, TableModel
 import pandas as pd
 import cv2
 import threading
-
+#Carlos Esteban Rivera Perez
 
 def update_table():
     new_data = pd.read_csv('datos_tabla.csv')

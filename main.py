@@ -6,7 +6,7 @@ import imageio
 import pandas as pd
 from PIL import Image
 import numpy as np
-
+#Carlos Esteban Rivera Perez
 
 class Poblacion:
     def __init__(self, tamaño_poblacion, tamaño_maximo_poblacion, radio_mutacion, radio_mutacion_individuo, numero_generaciones, limite_inferior, limite_superior, referencia_resolucion, funcion, tipo_optimizacion):
