@@ -6,6 +6,9 @@ import imageio
 import pandas as pd
 from PIL import Image
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import animation
+from termcolor import colored
 #Carlos Esteban Rivera Perez
 
 class Poblacion:
@@ -23,6 +26,9 @@ class Poblacion:
         self.delta_x = self.deltaX()
         self.funcion = funcion
         self.tipo_optimizacion = tipo_optimizacion
+        self.posibilidad_numeros = 2**self.bits - 1
+        self.resolucion_sistema = self.rango / self.posibilidad_numeros
+        self.resolucion_sistema = round(self.resolucion_sistema, int(math.log10(1 / self.referencia_resolucion)) + 1)
 
     def numero_bits(self):
         numero_puntos = (self.rango / self.referencia_resolucion) + 1
@@ -64,10 +70,11 @@ class Poblacion:
         return hijo1, hijo2
 
     def mutar(self, poblacion):
-        for individuo in poblacion:
-            if random.random() < self.radio_mutacion_individuo:  # Decide si el individuo debe mutar
-                bit = random.randint(0, self.bits - 1)  # Decide qué bit debe mutar
-                individuo[bit] = 1 - individuo[bit]  # Realiza la mutación del gen mediante la negación del bit
+        if random.random() < self.radio_mutacion:  # Decide si debe ocurrir alguna mutación en la población
+            for individuo in poblacion:
+                if random.random() < self.radio_mutacion_individuo:  # Decide si el individuo debe mutar
+                    bit = random.randint(0, self.bits - 1)  # Decide qué bit debe mutar
+                    individuo[bit] = 1 - individuo[bit]  # Realiza la mutación del gen mediante la negación del bit
         return poblacion
 
     def obtenerAptitud(self, individuo):
@@ -84,6 +91,59 @@ class Poblacion:
 
         # Devuelve los individuos más aptos hasta el tamaño máximo de la población
         return poblacion[:self.tamaño_maximo_poblacion]
+
+    def crearVideo(self, poblacion):
+        fig, ax = plt.subplots()
+
+        def animate(i):
+            ax.clear()
+            x_values = [self.limite_inferior + j * self.resolucion_sistema for j in range(self.posibilidad_numeros + 1)]
+            y_values = [self.f(x) for x in x_values]
+            ax.plot(x_values, y_values, label='f(x)')
+
+            # Obtener aptitudes y posiciones x para todos los individuos
+            aptitudes = [self.f(self.limite_inferior + int(''.join(map(str, individuo)), 2) * self.resolucion_sistema) for individuo in poblacion[i]]
+            xs = [self.limite_inferior + int(''.join(map(str, individuo)), 2) * self.resolucion_sistema for individuo in poblacion[i]]
+
+            # Encontrar mejor y peor individuo según su aptitud
+            if self.tipo_optimizacion == 1:
+                mejor_aptitud = max(aptitudes)
+                peor_aptitud = min(aptitudes)
+            elif self.tipo_optimizacion == 0:
+                mejor_aptitud = min(aptitudes)
+                peor_aptitud = max(aptitudes)
+
+            # Graficar todos los individuos
+            ax.scatter(xs, aptitudes, color='orange', alpha=0.6)  # Dibujar todos los individuos en gris
+
+            # Resaltar el mejor y el peor individuo
+            mejor_idx = aptitudes.index(mejor_aptitud)
+            peor_idx = aptitudes.index(peor_aptitud)
+            ax.scatter(xs[mejor_idx], aptitudes[mejor_idx], color='green', label='Mejor', edgecolors='black', s=100)
+            ax.scatter(xs[peor_idx], aptitudes[peor_idx], color='red', label='Peor', edgecolors='black', s=100)
+
+            media_aptitud = sum(aptitudes) / len(aptitudes)
+            ax.axhline(y=media_aptitud, color='pink', linestyle='--', label='Media')
+
+            plt.title(f'Generacion {i}')
+            plt.xlabel('Rango')
+            plt.ylabel('Aptitud')
+            ax.legend()
+
+        ani = animation.FuncAnimation(fig, animate, frames=self.numero_generaciones, interval=200)
+        ani.save('output.mp4', writer='ffmpeg')
+        plt.close(fig)
+
+
+    def ordenar(self, poblacion):
+        aptitudes = [self.obtenerAptitud(individuo) for individuo in poblacion]
+        pares = list(zip(aptitudes, poblacion))
+        pares_ordenados = sorted(pares, reverse=self.tipo_optimizacion)
+
+        atributosOrdenados, poblacionOrdenada = zip(*pares_ordenados)
+
+        return poblacionOrdenada, atributosOrdenados
+
 def main(tamaño_poblacion,tamaño_maximo_poblacion,radio_mutacion_individuo, radio_mutacion, numero_generaciones, limite_inferior, limite_superior, delta_asterisco, funcion, tipo_optimizacion, valor_n):
     poblacion = Poblacion(tamaño_poblacion,tamaño_maximo_poblacion, radio_mutacion, radio_mutacion_individuo, numero_generaciones, limite_inferior, limite_superior, delta_asterisco, funcion, tipo_optimizacion)
     poblacionI = poblacion.generarPoblacion(poblacion.tamaño_poblacion)
@@ -91,7 +151,8 @@ def main(tamaño_poblacion,tamaño_maximo_poblacion,radio_mutacion_individuo, ra
     mejores = []
     media = []
     peores = []
-    imagenes = []
+    poblaciones = []
+    mejor_individuo = []
 
     n = valor_n
     datos_tabla = pd.DataFrame(columns=['Cadena de bits', 'Índice', 'X', 'Aptitud'])
@@ -100,10 +161,6 @@ def main(tamaño_poblacion,tamaño_maximo_poblacion,radio_mutacion_individuo, ra
         hijos = poblacion.reproducir(poblacionI, n)
         hijosMutados = poblacion.mutar(hijos)
         poblacionI = tuple(list(poblacionI) + hijosMutados)
-        aptitudes = [poblacion.obtenerAptitud(individuo) for individuo in poblacionI]
-        indice_mejor = aptitudes.index(max(aptitudes))
-        mejor_individuo = poblacionI[indice_mejor]
-        datos_tabla = datos_tabla._append({'Cadena de bits': ''.join(str(bit) for bit in mejor_individuo), 'Índice': i, 'X': poblacion.limite_inferior + int(''.join(str(bit) for bit in mejor_individuo), 2) * poblacion.delta_x, 'Aptitud': poblacion.obtenerAptitud(mejor_individuo)}, ignore_index=True)
         atributosPoblacion = [poblacion.obtenerAptitud(individuo) for individuo in poblacionI]
 
         if tipo_optimizacion == 1:
@@ -112,13 +169,12 @@ def main(tamaño_poblacion,tamaño_maximo_poblacion,radio_mutacion_individuo, ra
         elif tipo_optimizacion == 0:
             mejores.append(min(atributosPoblacion))
             peores.append(max(atributosPoblacion))
-
         media.append(sum(atributosPoblacion) / len(atributosPoblacion))
+
+        poblaciones.append(poblacionI)
 
         poblacionI = poblacion.podar(poblacionI)
 
-        # Crear y guardar la gráfica
-        x = range(i + 1)
         fig, axs = plt.subplots(1, figsize=(5, 5))
         axs.plot(mejores, label='Mejores')
         axs.plot(peores, label='Peores')
@@ -132,25 +188,23 @@ def main(tamaño_poblacion,tamaño_maximo_poblacion,radio_mutacion_individuo, ra
         print('Mejor individuo:', max(mejores))
         print('Peor individuo:', min(peores))
 
-        nombre_archivo = f"grafica{i}.png"
-        fig.savefig(nombre_archivo)
-        imagenes.append(imageio.imread(nombre_archivo))
-
         plt.close(fig)
 
-    datos_tabla.to_csv('datos_tabla.csv', index=False)
+        mejor_individuo.append(poblacionI[0])
 
-    imagenes_resized = [Image.fromarray(img).resize((img.shape[1] // 2, img.shape[0] // 2), Image.LANCZOS) for img in imagenes]
+    poblacionOrdenada, atributosOrdenados = poblacion.ordenar(mejor_individuo)
+    numero = int(''.join(str(bit) for bit in poblacionOrdenada[0]), 2)
+    x = limite_inferior + numero * poblacion.delta_x
 
-    # Volver a cambiar el tamaño de las imágenes al tamaño original
-    imagenes_resized = [img.resize((img.size[0] * 2, img.size[1] * 2), Image.LANCZOS) for img in imagenes_resized]
+    datos_tabla = datos_tabla._append({
+        'Cadena de bits': ''.join(map(str, poblacionOrdenada[0])),
+        'Índice': numero,
+        'X': x,
+        'Aptitud': atributosOrdenados[0]
+    }, ignore_index=True)
 
-    # Convertir las imágenes a arrays de numpy
-    imagenes_resized = [np.array(img) for img in imagenes_resized]
-
-    with imageio.get_writer('output.mp4', fps=0.5) as writer:
-        for img in imagenes_resized:
-            writer.append_data(img)
+    datos_tabla.to_csv('mejor_individuo.csv', index=False)
+    poblacion.crearVideo(poblaciones)
 
 if __name__ == "__main__":
     def main():
